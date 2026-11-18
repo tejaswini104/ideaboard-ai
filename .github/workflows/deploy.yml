@@ -1,0 +1,59 @@
+name: Deploy to Kubernetes (manual approval)
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment label
+        required: true
+        type: choice
+        options: [staging, production]
+permissions:
+  contents: read
+  packages: write
+  deployments: write
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set image names
+        id: vars
+        run: echo "owner=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: true
+          tags: ghcr.io/${{ steps.vars.outputs.owner }}/ideaboard-backend:${{ github.sha }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: true
+          tags: ghcr.io/${{ steps.vars.outputs.owner }}/ideaboard-frontend:${{ github.sha }}
+      - name: Configure kubectl
+        env: {KUBECONFIG_B64: '${{ secrets.KUBECONFIG_B64 }}'}
+        run: |
+          test -n "$KUBECONFIG_B64" || (echo 'Add KUBECONFIG_B64 secret to this GitHub Environment' && exit 1)
+          mkdir -p "$HOME/.kube"
+          echo "$KUBECONFIG_B64" | base64 -d > "$HOME/.kube/config"
+      - name: Apply namespace and workloads
+        env:
+          OWNER: ${{ steps.vars.outputs.owner }}
+          SHA: ${{ github.sha }}
+        run: |
+          kubectl apply -f k8s/namespace.yaml
+          sed "s|BACKEND_IMAGE|ghcr.io/$OWNER/ideaboard-backend:$SHA|; s|FRONTEND_IMAGE|ghcr.io/$OWNER/ideaboard-frontend:$SHA|" k8s/app.yaml | kubectl apply -f -
+          kubectl rollout status deployment/backend -n ideaboard --timeout=180s
+          kubectl rollout status deployment/frontend -n ideaboard --timeout=180s
+      - name: AI post-deployment log analysis (advisory only)
+        if: always()
+        env: {OPENAI_API_KEY: '${{ secrets.OPENAI_API_KEY }}'}
+        run: |
+          kubectl get pods -n ideaboard -o wide > deploy.log 2>&1 || true
+          kubectl get events -n ideaboard --sort-by=.lastTimestamp >> deploy.log 2>&1 || true
+          python scripts/ai_analyze.py deploy.log
