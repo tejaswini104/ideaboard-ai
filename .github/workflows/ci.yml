@@ -1,32 +1,52 @@
+
 name: CI - test, scan and build
+
 on:
   push:
     branches: [main]
   pull_request:
   workflow_dispatch:
+
 permissions:
   contents: read
   security-events: write
+
 jobs:
   test-build:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: {python-version: '3.12'}
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
       - name: Install backend dependencies
         run: pip install -r backend/requirements.txt
+
       - name: Python syntax check
         run: python -m compileall -q backend/app
-      - uses: actions/setup-node@v4
-        with: {node-version: '22'}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
       - name: Build frontend
         working-directory: frontend
-        run: npm install && npm run build
+        run: |
+          npm install
+          npm run build
+
       - name: Build backend image
         run: docker build -t ideaboard-backend:${{ github.sha }} ./backend
+
       - name: Build frontend image
         run: docker build -t ideaboard-frontend:${{ github.sha }} ./frontend
+
       - name: Dependency vulnerability scan (Trivy)
         uses: aquasecurity/trivy-action@v0.29.0
         with:
@@ -34,7 +54,8 @@ jobs:
           scan-ref: .
           format: table
           exit-code: '0'
-      - name: AI-assisted CI log analysis (optional, advisory only)
+
+      - name: AI-assisted CI log analysis
         if: always()
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
