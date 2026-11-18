@@ -47,15 +47,6 @@ jobs:
       - name: Build frontend image
         run: docker build -t ideaboard-frontend:${{ github.sha }} ./frontend
 
-      - name: Dependency vulnerability scan (Trivy)
-        uses: aquasecurity/trivy-action@v0.29.0
-        with:
-          scan-type: fs
-          scan-ref: .
-          format: table
-          exit-code: '0'
-
-      
       - name: Scan Backend Docker Image (Grype)
         uses: anchore/scan-action@v7
         with:
@@ -69,8 +60,6 @@ jobs:
           image: ideaboard-frontend:${{ github.sha }}
           output-format: table
           fail-build: false
-
-(replace trivy with grype image scanning)
 
       - name: AI-assisted CI log analysis
         if: always()
