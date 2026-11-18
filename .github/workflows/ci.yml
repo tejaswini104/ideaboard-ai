@@ -55,6 +55,23 @@ jobs:
           format: table
           exit-code: '0'
 
+      
+      - name: Scan Backend Docker Image (Grype)
+        uses: anchore/scan-action@v7
+        with:
+          image: ideaboard-backend:${{ github.sha }}
+          output-format: table
+          fail-build: false
+
+      - name: Scan Frontend Docker Image (Grype)
+        uses: anchore/scan-action@v7
+        with:
+          image: ideaboard-frontend:${{ github.sha }}
+          output-format: table
+          fail-build: false
+
+(replace trivy with grype image scanning)
+
       - name: AI-assisted CI log analysis
         if: always()
         env:
