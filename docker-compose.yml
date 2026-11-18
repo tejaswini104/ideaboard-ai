@@ -4,29 +4,22 @@ services:
     environment:
       POSTGRES_DB: ideaboard
       POSTGRES_USER: ideaboard
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-dev-only-change-me}
+      POSTGRES_PASSWORD: local-dev-only-change-me
+    ports: ["5432:5432"]
     volumes: ["postgres_data:/var/lib/postgresql/data"]
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ideaboard -d ideaboard"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
     restart: unless-stopped
   backend:
     build: ./backend
     environment:
-      DATABASE_URL: postgresql+psycopg://ideaboard:${POSTGRES_PASSWORD:-local-dev-only-change-me}@db:5432/ideaboard
-      CORS_ORIGINS: http://localhost:3000
-    depends_on:
-      db: {condition: service_healthy}
+      DATABASE_URL: postgresql+psycopg://ideaboard:local-dev-only-change-me@db:5432/ideaboard
+      CORS_ORIGINS: "*"
+    depends_on: [db]
     ports: ["8000:8000"]
     restart: unless-stopped
   frontend:
-    build:
-      context: ./frontend
-      args: {VITE_API_URL: ""}
+    image: ideaboard-ai-frontend:latest
     depends_on: [backend]
-    ports: ["3000:80"]
+    ports: ["80:80"]
     restart: unless-stopped
 volumes:
   postgres_data:
